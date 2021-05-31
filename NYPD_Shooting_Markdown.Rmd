@@ -1,0 +1,220 @@
+---
+title: "NYPD Shooting Incident Project"
+author: "Chirayu Parikh"
+date: "5/17/2021"
+output:
+  pdf_document: default
+  word_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+### Import Libraries and CSV data, then check column and first few entries of the dataframe.
+
+```{r, include=TRUE}
+library(tidyverse)
+library(lubridate)
+library(dplyr)
+library(ggplot2)
+library(caret)
+rawdata <- read_csv("https://data.cityofnewyork.us/api/views/833y-fsy8/rows.csv?accessType=DOWNLOAD")
+
+summary(rawdata)
+head(rawdata)
+```
+
+### Tidy the data and sort the dataframe by date and time. Since we will not be overlying the datapoints on a map, the location data (latitude, longitude, etc.) has been removed from the dataframe.
+
+
+```{r, echo=TRUE}
+nypd_shooting <- rawdata %>%
+  summarise(Incident_Key=as.numeric(INCIDENT_KEY),
+            Date=mdy(OCCUR_DATE),
+            Time=OCCUR_TIME,
+            Borough=BORO,
+            Precinct=as.numeric(PRECINCT),
+            Jurisdiction_code=as.numeric(JURISDICTION_CODE),
+            Location_Description=LOCATION_DESC,
+            Stat_Murder_flag=STATISTICAL_MURDER_FLAG,
+            Perp_Age_group=PERP_AGE_GROUP,
+            Perp_Sex=PERP_SEX,
+            Perp_Race=PERP_RACE,
+            Victom_Age_group=VIC_AGE_GROUP,
+            Victom_Sex=VIC_SEX,
+            Victom_Race=VIC_RACE)
+
+nypd_sorted <- nypd_shooting[order(nypd_shooting$Date, nypd_shooting$Time),]
+head(nypd_sorted)
+
+```
+
+### Graph the shooting data by date, we can see the trend in NYC shootings over time. The first graph is very dense, due to large number of datapoints. However it shows slight downward trend in shooting incidents until a large spike in 2020. Further, seperating date into days, months and years and plotting the yearly shooting incidently we find the raise in incidends in 2020 was from July. My theory on the spike in 2020 is that, it was during the time when NYC among other places had experiance riots due to the killing of Geroge Floyd and Black Lifes Matter protest that followed afterwards. That being said, the trend in general is downwards for shooting incidents in NYC.
+
+```{r, echo=TRUE}
+
+nypd_sorted %>%
+  group_by(Date) %>%
+  ggplot(aes(x = Date)) +
+  geom_line(stat="count") +
+  scale_x_date(date_labels = "%Y %b %d") +
+  theme(plot.title = element_text(hjust = 0.5),
+        axis.text.x=element_text(angle=90, hjust=1, size=8),
+        panel.spacing.x=unit(0.5, "lines")) +
+  labs(x = "Date",
+       y = "Number of Shooting Incidents",
+       title = "Number of shooting since 2006 to 2020")
+
+nypd_year <- rawdata %>%
+  mutate(Month = str_sub(OCCUR_DATE,1,2)) %>% # Seperating the Month
+  mutate(Day = str_sub(OCCUR_DATE,4,5)) %>% # Seperating the Day
+  mutate(Year = str_sub(OCCUR_DATE,7)) # Seperating the year
+
+nypd_year %>%
+  group_by(Year) %>%
+  ggplot(aes(x = Year)) +
+  geom_bar(stat="count") +
+  #theme(legend.position = "bottom", axis.text.x = element_text(angle = 90))
+  theme(plot.title = element_text(hjust = 0.5),
+        axis.text.x=element_text(angle=90, hjust=1, size=8),
+        panel.spacing.x=unit(0.5, "lines")) +
+  labs(x = "Year",
+       y = "Number of Shooting Incidents",
+       title = "Number of Shooting per year")
+  
+nypd_year %>%
+  group_by(Year) %>%
+  ggplot(aes(x = Month)) +
+  geom_bar(stat="count") +
+  facet_wrap( ~ Year) +
+  theme(plot.title = element_text(hjust = 0.5),
+        axis.text.x=element_text(angle=90, hjust=1, size=8),
+        panel.spacing.x=unit(0.5, "lines")) +
+  labs(x = "Month",
+       y = "Number of Shooting Incidents",
+       title = "Yearly breakup of NYC shooting incidents")
+```
+
+### Boroughs wise graph of shooting incidents in NYC. New York City is composed of five boroughs, they are, Bronx, Brooklyn, Manhattan, Queens, and Staten Island. We see that Brooklyn has the highest shooting incidents follow by Brox. As expected Staten Island has the lowest incident of the five boroughs.
+
+```{r, echo=TRUE}
+
+qplot(nypd_sorted$Borough, xlab = "Boroughs", ylab = "Number of Shooting Incidents")
+
+```
+
+### We now plot the perpetrator and victoms based on sex, racial profile and age group. We see that majority of the Perpetrators and victoms are male, about 90 percent of them. We also see that perpetrators and victoms of the shooting incidents are predominant black. Finally, we see the that large number of incidents fall in age group from 18 to 44 years for both perpetrators and victoms.
+
+### One intersting observaton for perpetrators dataset is that we see some misisng data points, for instance 'NA' in the field. This maybe because information about the perpetrator is still not known. For example, if there was a shooting event and by the time it was reported the perpetrator(s) could have fled the scene.
+  
+```{r, echo=TRUE}
+qplot(nypd_sorted$Victom_Sex,
+      xlab = "Victom's Sex",
+      ylab = "Number of victoms in Shooting Incidents")
+
+qplot(nypd_sorted$Perp_Sex,
+      xlab = "Perpetrator's Sex",
+      ylab = "Number of Perpetrator in Shooting Incidents")
+
+nypd_sorted %>%
+  group_by(Victom_Race) %>%
+  ggplot(aes(x = Victom_Race)) +
+  geom_bar(stat="count") +
+  coord_flip() +
+  #theme(legend.position = "bottom", axis.text.x = element_text(angle = 90)) +
+  theme(plot.title = element_text(hjust = 0.5),
+        axis.text.x=element_text(angle=90, hjust=1, size=8),
+        panel.spacing.x=unit(0.5, "lines")) +
+  labs(x = "Victom Race",
+       y = "Number of victoms in NYC shooting",
+       title = "Racial grouping of NYC shooting incidents victoms")
+
+nypd_sorted %>%
+  group_by(Perp_Race) %>%
+  ggplot(aes(x = Perp_Race)) +
+  geom_bar(stat="count") +
+  coord_flip() +
+  theme(plot.title = element_text(hjust = 0.5),
+        axis.text.x=element_text(angle=90, hjust=1, size=8),
+        panel.spacing.x=unit(0.5, "lines")) +
+  labs(x = "Perpetrator Race",
+       y = "Number of Shooting Acts commited",
+       title = "Racial grouping of NYC shooting incidents perpetrators")
+  
+nypd_sorted %>%
+  group_by(Victom_Age_group) %>%
+  ggplot(aes(x = Victom_Age_group)) +
+  geom_bar(stat="count") +
+  coord_flip() +
+  theme(plot.title = element_text(hjust = 0.5),
+        axis.text.x=element_text(angle=90, hjust=1, size=8),
+        panel.spacing.x=unit(0.5, "lines")) +
+  labs(x = "Victom Age Group",
+       y = "Number of Shooting Incidents",
+       title = "Age grouping of Victoms")
+
+nypd_sorted %>%
+  group_by(Perp_Age_group) %>%
+  ggplot(aes(x = Perp_Age_group)) +
+  geom_bar(stat="count") +
+  coord_flip() +
+  theme(plot.title = element_text(hjust = 0.5),
+        axis.text.x=element_text(angle=90, hjust=1, size=8),
+        panel.spacing.x=unit(0.5, "lines")) +
+  labs(x = "Perpetrator Age Group",
+       y = "Number of Shooting Incidents",
+       title = "Age grouping of Perpetrators")
+```
+
+
+### Calculate male to female percentage for Perpetrator and Victoms
+
+```{r, echo=TRUE}
+# Calculating percentage of Male vs Female for both Perpetrator and Victoms
+all_female_victoms <- dplyr::filter(nypd_sorted, Victom_Sex %in% "F")
+all_male_victoms <- dplyr::filter(nypd_sorted, Victom_Sex %in% "M")
+
+percent_female_vic <- (nrow(all_female_victoms) / nrow(nypd_sorted)) * 100
+percent_male_vic <- (nrow(all_male_victoms) / nrow(nypd_sorted)) * 100
+
+all_female_perp <- dplyr::filter(nypd_sorted, Perp_Sex %in% "F")
+all_male_perp <- dplyr::filter(nypd_sorted, Perp_Sex %in% "M")
+
+percent_female_perp <- (nrow(all_female_perp) / nrow(nypd_sorted)) * 100
+percent_male_perp <- (nrow(all_male_perp) / nrow(nypd_sorted)) * 100
+
+percent_female_perp
+percent_male_perp
+percent_female_vic
+percent_male_vic
+```
+
+### Using Naive Model which will do a simple prediction of victom's race with the most occurrences in the data set. The model however, is not very accurate with accuracy of 71 percentage.
+
+```{r, echo=TRUE}
+
+# Factorize victoms race
+nypd_sorted$Victom_Race <- factor(nypd_sorted$Victom_Race)
+
+y <- nypd_sorted$Victom_Race
+test_index <- createDataPartition(y, times = 1, p = 0.2, list = FALSE)
+train_set <- nypd_sorted %>% slice(-test_index)
+test_set <- nypd_sorted %>% slice(test_index)
+
+naive_guess <- train_set %>% 
+  group_by(Victom_Race) %>%
+  summarize(count = n()) %>%
+  filter(count == max(count)) %>%
+  pull(Victom_Race)
+y_naive <- test_set %>%
+  mutate(y_hat = naive_guess) %>%
+  pull(y_hat)
+naive_acc <- confusionMatrix(y_naive, reference = test_set$Victom_Race)$overall["Accuracy"]
+
+naive_acc
+```
+
+
+### In conclusion, there is an big spike in the shooting incident's in year 2020. However, in genral we see downward trend in the number of incident's. The dataset does not include demographics and other economic data. Therefore, this data would need to be used with other dataset's to do further analysis. This would be one of the bias in this analysis. Also since I am very familer with crime statistics and crime related data. This kind of analysis would require multi domain expertise and combing different ecomonic and demographic dataset's. There is also some nuances about different cities, which can also add bias.
